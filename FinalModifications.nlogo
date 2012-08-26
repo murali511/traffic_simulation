@@ -13,7 +13,8 @@ globals
   num-buses-slowed        ;; the number of buses that are stopped at a bus bay
   current-light            ;; the currently selected light
   current-busstop          ;; the current selected busstop
-
+  num-oppositeroads        ;; number of opposite road  
+  num-roads        ;; number of road
 
   ;; patch agentsets 
   intersections ;; agentset containing the patches that are intersections
@@ -104,12 +105,10 @@ to setup
   setup-patches
   make-current one-of  intersections-west 
   make-busstop one-of intersections
-;  label-current
-
-;;  set-default-shape turtles "car"
-
-
-  if (num-cars > ( count roads + count oppositeroads))
+  set num-roads count roads
+  set num-oppositeroads count oppositeroads
+;  user-message(word "total roads" count roads word "total opproads" count oppositeroads word "total cars" num-cars word"total buses" num-buses)stop
+  if (num-cars > ( count roads - 4) or num-cars > (count oppositeroads - 4))
   [
     user-message (word "There are too many cars for the amount of "
                        "road.  Either increase the amount of roads "
@@ -119,13 +118,24 @@ to setup
                        "The setup has stopped.")
     stop
   ]
-  if (num-buses > ( count roads + count oppositeroads))
+  if (num-buses > ( count roads - 4) or num-buses > (count oppositeroads - 4))
   [
     user-message (word "There are too many buses for the amount of "
                        "road.  Either increase the amount of roads "
                        "by increasing the GRID-SIZE-X or "
                        "GRID-SIZE-Y sliders, or decrease the "
                        "number of buses by lowering the NUMBER slider.\n"
+                       "The setup has stopped.")
+    stop
+  ]
+  
+  if ((num-cars + num-buses) >= ( count roads - 4) or (num-cars + num-buses) >= (count oppositeroads - 4))
+  [
+    user-message (word "There are too many cars and buses for the amount of "
+                       "road.  Either increase the amount of roads "
+                       "by increasing the GRID-SIZE-X or "
+                       "GRID-SIZE-Y sliders, or decrease the "
+                       "number of cars or buses by lowering the NUMBER slider.\n"
                        "The setup has stopped.")
     stop
   ]
@@ -156,6 +166,7 @@ to setup-globals
   set grid-y-inc world-height / grid-size-y
   set remainingcars num-cars
   set remainingbuses num-buses
+  
 
   ;; don't make acceleration 0.1 since we could get a rounding error and end up on a patch boundary
   set acceleration 0.099
@@ -273,9 +284,8 @@ end
 ;; Initialize the turtle variables to appropriate values and place the turtle on an empty road patch.
 to setup-cars  ;; turtle procedure
   set-default-shape turtles "car"  
-  ;; put half cars on one lane and other half on opposite lane
- set  remainingcars  random (num-cars ) 
-;     user-message (remainingcars) stop
+
+ set  remainingcars  random (num-cars )   
   create-newcars remainingcars
   [
   set speed 0
@@ -313,7 +323,6 @@ end
 to setup-oppositecars
     set-default-shape turtles "othercar"  
     set remainingcars ( num-cars - remainingcars)
-   ; user-message (remainingcars)stop
    if remainingcars = 0
    [
      set remainingcars 1
@@ -359,12 +368,14 @@ end
 to setup-buses  ;; turtle procedure
   set-default-shape turtles "bus"  
   set remainingbuses random(num-buses )
+  
+  
   create-newbuses ( remainingbuses )
   [
   set speed 0
   set bus-wait-time 0
-  set size 1.4
-  ;;set up-bus? true
+;  set size 1.4
+  
   put-on-empty-road
   ifelse intersection?
   [
@@ -399,17 +410,16 @@ end
 to setup-oppositebuses
     set-default-shape turtles "other-bus"  
     set remainingbuses (num-buses - remainingbuses)
+      
     if remainingbuses = 0
     [
       set remainingbuses 1
-      ]
-;    user-message (remainingbuses) stop
+      ]  
   create-oppositebuses round ( remainingbuses)
   [
   set speed 0
   set bus-wait-time 0
-  set size 1.4
-  ;;set up-bus? true
+  ;set size 1.4
   put-on-empty-oppositeroad
   ifelse intersection?
   [
@@ -442,8 +452,8 @@ to setup-oppositebuses
 end
 
 ;; Find a road patch without any turtles on it and place the turtle there.
-to put-on-empty-road  ;; turtle procedure
-  move-to one-of roads with [not any? turtles-on self and pcolor = white]
+to put-on-empty-road  ;; turtle procedure  
+  move-to one-of roads with [not any? turtles-on self and pcolor = white]   
 end
 
 ;; Find a opposite-road patch without any turtles on it and place the turtle there.
@@ -461,7 +471,6 @@ to go
 
   update-current
   ;update-busstops
-  ;; have the intersections change their color
   set-signals
   
   ;; create busstops at intersections
@@ -864,7 +873,10 @@ to set-signal-colors  ;; intersection (patch) procedure
       set intersection? true
       ]
   ]
-  ;ask patch-at 1 0 [ set pcolor 36 ]
+  ask patch-at 1 0 [ set pcolor 36 ]
+  ask patch-at 0 1 [ set pcolor 36 ]
+  ask patch-at 1 2 [ set pcolor 36 ]
+  ask patch-at 2 1 [ set pcolor 36 ]
 end
 
 
@@ -881,9 +893,11 @@ to set-car-speed  ;; turtle procedure
   [
     ifelse up-vehicle? 
     [ 
-      ifelse [pcolor] of patch-at -1 0 = 24 and any? (turtles-on patch-ahead 1 ) with [shape = "bus"]
+      ;slow down the cars if there is a bus stop on side of road and if there is a bus in the bus stop
+      ifelse [pcolor] of patch-at -2 0 = 24 and any? (turtles-on patch-ahead 1 ) with [shape = "bus"]
       [
         set speed 0.5
+        user-message(word "car slowed")stop
         record-slowed-cardata 
       ]
       [
@@ -891,9 +905,10 @@ to set-car-speed  ;; turtle procedure
       ]
     ]
     [
-      ifelse [pcolor] of patch-at 0 -1 = 24 and any? (turtles-on patch-ahead 1 ) with [shape = "bus"]
+      ifelse [pcolor] of patch-at 0 -2 = 24 and any? (turtles-on patch-ahead 1 ) with [shape = "bus"]
       [
         set speed 0.5
+                user-message(word "car slowed1")stop
         record-slowed-cardata       
       ]
       [set-speed 1 0 ]
@@ -914,9 +929,11 @@ to set-oppositecar-speed  ;; turtle procedure
         ;;slow down the turtle if there is a stop and only if there is other vehicle in front
     ifelse down-vehicle? 
     [
-      ifelse [pcolor] of patch-at 1 0 = 24 and (any? (turtles-on patch-ahead -1 ) with [shape = "other-bus"])  
+            ;slow down the cars if there is a bus stop on side of road and if there is a bus in the bus stop
+      ifelse [pcolor] of patch-at 1 0 = 24 ;and (any? (turtles-on patch-ahead -1 ) with [shape = "other-bus"])  
       [
         set speed 0.5
+                user-message(word "car slowed2")stop
         record-slowed-cardata    
       ]
       [
@@ -927,6 +944,7 @@ to set-oppositecar-speed  ;; turtle procedure
        ifelse [pcolor] of patch-at 0 1 = 24 and (any? (turtles-on patch-ahead -1 ) with [shape = "other-bus"])  
       [
         set speed 0.5
+                user-message(word "car slowed3")stop
         record-slowed-cardata 
       ]
        [
@@ -949,6 +967,7 @@ to set-bus-speed  ;; turtle procedure
     [ 
       ifelse [pcolor] of patch-at -1 0 = 24
       [
+            ;            user-message(word "bus slowed") stop
         set speed 0.5  
         record-slowed-busdata  
       ]
@@ -960,6 +979,7 @@ to set-bus-speed  ;; turtle procedure
       ifelse [pcolor] of patch-at 0 -1 = 24
       [
         set speed 0.5
+             ;   user-message(word "car slowed1")stop
         record-slowed-busdata       
       ]
       [set-busspeed 1 0 ]
@@ -975,6 +995,7 @@ to set-bus-speed  ;; turtle procedure
       ifelse [pcolor] of patch-at -1 0 = 24
       [
         set speed 0.5  
+              ;  user-message(word "car slowed2")stop
         record-slowed-busdata        
         ;user-message (word "slowed 11") stop          
       ]
@@ -986,6 +1007,7 @@ to set-bus-speed  ;; turtle procedure
       ifelse [pcolor] of patch-at 0 -1 = 24
       [
         set speed 0.5
+               ; user-message(word "car slowed3")stop
         record-slowed-busdata        
       ]
       [set-busspeed 1 0 ]
@@ -1230,6 +1252,7 @@ to record-slowed-cardata  ;; turtle procedure
   ifelse speed = 0.5
   [
     set num-cars-slowed num-cars-slowed + 1
+    ;user-message(num-cars-slowed) stop
     set wait-time wait-time + 0.5
   ]
   [ set wait-time 0 ]
@@ -1309,10 +1332,10 @@ ticks
 30.0
 
 PLOT
-468
-494
-686
-658
+780
+493
+1152
+659
 Average Wait Time of Cars
 Time
 Average Wait
@@ -1324,14 +1347,14 @@ true
 true
 "" ""
 PENS
-"default" 1.0 0 -16777216 true "" "plot mean [wait-time] of turtles with [ shape = \"car\" or shape = \"othercar\"]"
-"pen-1" 1.0 0 -13345367 true "" "plot mean [bus-wait-time] of turtles with [ shape = \"bus\" or shape = \"other-bus\" or shape = \"horizontalbus\" or shape =\"horizontalbus1\"]"
+"cars-wait-time" 1.0 0 -16777216 true "" "plot mean [wait-time] of turtles with [ shape = \"car\" or shape = \"othercar\"]"
+"bus-wait-time" 1.0 0 -13345367 true "" "plot mean [bus-wait-time] of turtles with [ shape = \"bus\" or shape = \"other-bus\" or shape = \"horizontalbus\" or shape =\"horizontalbus1\"]"
 
 PLOT
-243
+393
 494
-459
-659
+773
+656
 Avg Speed of Cars & buses
 Time
 Average Speed
@@ -1343,8 +1366,8 @@ true
 true
 "set-plot-y-range 0 speed-limit" ""
 PENS
-"default" 1.0 0 -16777216 true "" "plot mean [speed] of turtles with [ shape = \"car\" or shape = \"othercar\"]"
-"pen-1" 1.0 0 -13345367 true "" "plot mean [speed] of turtles with [ shape = \"bus\" or shape = \"other-bus\" or shape = \"horizontalbus\" or shape = \"horizontalbus1\"]"
+"car-speed" 1.0 0 -16777216 true "" "plot mean [speed] of turtles with [ shape = \"car\" or shape = \"othercar\"]"
+"bus-speed" 1.0 0 -13345367 true "" "plot mean [speed] of turtles with [ shape = \"bus\" or shape = \"other-bus\" or shape = \"horizontalbus\" or shape = \"horizontalbus1\"]"
 
 SLIDER
 108
@@ -1396,20 +1419,20 @@ num-cars
 num-cars
 1
 400
-55
+114
 1
 1
 NIL
 HORIZONTAL
 
 PLOT
-20
-493
-234
+7
+491
+383
 657
 Stopped Cars & buses
 Time
-Stopped Cars
+Stopped Cars,buses
 0.0
 100.0
 0.0
@@ -1418,8 +1441,8 @@ true
 true
 "set-plot-y-range 0 num-cars" ""
 PENS
-"default" 1.0 0 -16777216 true "" "plot num-cars-stopped"
-"pen-1" 1.0 0 -13791810 true "" "plot num-buses-stopped"
+"cars-stopped" 1.0 0 -16777216 true "" "plot num-cars-stopped"
+"bus-stopped" 1.0 0 -13791810 true "" "plot num-buses-stopped"
 
 BUTTON
 221
@@ -1581,8 +1604,8 @@ SLIDER
 num-buses
 num-buses
 1
-400
-24
+200
+25
 1
 1
 NIL
@@ -1606,13 +1629,13 @@ NIL
 0
 
 PLOT
-715
-497
-915
-647
+776
+325
+1152
+477
 slowed buses  & cars
 Time
-slowed buses
+slowed buses & cars
 0.0
 100.0
 0.0
@@ -1621,8 +1644,8 @@ true
 true
 "set-plot-y-range 0 num-buses" ""
 PENS
-"default" 1.0 0 -13345367 true "" "plot num-buses-slowed"
-"pen-1" 1.0 0 -16449023 true "" "plot  num-cars-slowed"
+"cars-slowed" 1.0 0 -13345367 true "" "plot num-buses-slowed"
+"buses-slowed" 1.0 0 -16449023 true "" "plot num-cars-slowed"
 
 BUTTON
 780
