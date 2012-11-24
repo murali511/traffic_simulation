@@ -9,13 +9,17 @@ globals
   phase                    ;; keeps track of the phase
   num-cars-stopped         ;; the number of cars that are stopped during a single pass thru the go procedure
   num-buses-stopped        ;; the number of buses that are stopped at a bus bay
+  
+  ;vehicles slowed at brown busstop
   num-cars-slowed         ;; the number of cars that are stopped during a single pass thru the go procedure
   num-buses-slowed        ;; the number of buses that are stopped at a bus bay
+  
+  ;vehicles stopped because of yellow busstop
+  num-cars-stopped-at-yellowstop
+  
   current-light            ;; the currently selected light
   current-busstop          ;; the current selected busstop
-  num-oppositeroads        ;; number of opposite road  
-  num-roads        ;; number of road
-
+  
   ;; patch agentsets 
   intersections ;; agentset containing the patches that are intersections
   intersections-west ;; agentset containing the patches that are intersections
@@ -25,9 +29,10 @@ globals
   roads         ;; agentset containing the patches that are roads
   roaddividers  ;; agentset containing the patches that are road dividers
   oppositeroads         ;; agentset containing the patches that are opposite roads
-  
-  remainingcars ;; number of cars remaining
-  remainingbuses ;; number of buses remaining
+ 
+  ;count of remaining vehicles
+  remainingcars
+  remainingbuses
   
 ]
 
@@ -105,8 +110,6 @@ to setup
   setup-patches
   make-current one-of  intersections-west 
   make-busstop one-of intersections
-  set num-roads count roads
-  set num-oppositeroads count oppositeroads
 ;  user-message(word "total roads" count roads word "total opproads" count oppositeroads word "total cars" num-cars word"total buses" num-buses)stop
   if (num-cars > ( count roads - 4) or num-cars > (count oppositeroads - 4))
   [
@@ -118,7 +121,7 @@ to setup
                        "The setup has stopped.")
     stop
   ]
-  if (num-buses > ( count roads - 4) or num-buses > (count oppositeroads - 4))
+  if (num-buses > ( count roads -  4) or num-buses > (count oppositeroads - 4))
   [
     user-message (word "There are too many buses for the amount of "
                        "road.  Either increase the amount of roads "
@@ -162,12 +165,13 @@ to setup-globals
   set phase 0
   set num-cars-stopped 0
   set num-buses-stopped 0
+  set num-cars-slowed 0
+  set num-buses-slowed 0
+    
+  set num-cars-stopped-at-yellowstop 0
   set grid-x-inc world-width / grid-size-x
   set grid-y-inc world-height / grid-size-y
-  set remainingcars num-cars
-  set remainingbuses num-buses
-  
-
+ 
   ;; don't make acceleration 0.1 since we could get a rounding error and end up on a patch boundary
   set acceleration 0.099
 end
@@ -250,7 +254,7 @@ to setup-intersections
     set my-row floor((pycor + max-pycor) / grid-y-inc)
     set my-column floor((pxcor + max-pxcor) / grid-x-inc)
     set-signal-colors
-    set pcolor 36
+    ;set pcolor 36
     
   ]
   ask intersections-west
@@ -259,7 +263,7 @@ to setup-intersections
     set green-light-up? true
     set my-phase 0
     set auto? true
-        set pcolor 36
+     ;   set pcolor 36
  ]
    ask intersections-south
   [
@@ -267,7 +271,7 @@ to setup-intersections
     set green-light-up? true
     set my-phase 0
     set auto? true
-       set pcolor 36
+      ; set pcolor 36
  ]
    ask intersections-north
   [
@@ -275,7 +279,7 @@ to setup-intersections
     set green-light-up? true
     set my-phase 0
     set auto? true
-        set pcolor 36
+       ; set pcolor 36
  ]
  
  
@@ -285,7 +289,11 @@ end
 to setup-cars  ;; turtle procedure
   set-default-shape turtles "car"  
 
- set  remainingcars  random (num-cars )   
+ set  remainingcars  random (num-cars ) 
+ if remainingcars = 0
+   [
+     set remainingcars 1
+     ]  
   create-newcars remainingcars
   [
   set speed 0
@@ -368,13 +376,16 @@ end
 to setup-buses  ;; turtle procedure
   set-default-shape turtles "bus"  
   set remainingbuses random(num-buses )
-  
+   if remainingbuses = 0
+    [
+      set remainingbuses 1
+      ]  
   
   create-newbuses ( remainingbuses )
   [
   set speed 0
   set bus-wait-time 0
-;  set size 1.4
+  set size 1.3
   
   put-on-empty-road
   ifelse intersection?
@@ -419,7 +430,7 @@ to setup-oppositebuses
   [
   set speed 0
   set bus-wait-time 0
-  ;set size 1.4
+  set size 1.3
   put-on-empty-oppositeroad
   ifelse intersection?
   [
@@ -462,6 +473,7 @@ to put-on-empty-oppositeroad  ;; turtle procedure
 end
 
 
+
 ;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Runtime Procedures ;;
 ;;;;;;;;;;;;;;;;;;;;;;;;
@@ -478,25 +490,27 @@ to go
    
   set num-cars-stopped 0
   set num-buses-stopped 0
+  set num-cars-slowed 0
+  set num-buses-slowed 0
+  set num-cars-stopped-at-yellowstop 0
   ;; set the turtles speed for this time thru the procedure, move them forward their speed,
   ;; record data for plotting, and set the color of the turtles to an appropriate color
   ;; based on their speed
   ask newcars
   [
        set-car-speed 
-          fd speed          
+      fd speed          
     record-data
-    ;record-slowed-cardata
+    record-slowed-cardata
     set-car-color
   ]
    ask oppositecars
   [
            set-oppositecar-speed               
            ;set negativespeed  ( - speed)
-          fd  (- speed)
-          
+          fd  (- speed)          
     record-data
-        ;record-slowed-cardata
+    record-slowed-cardata
     set-oppositecar-color            
   ]
   ask newbuses
@@ -504,7 +518,7 @@ to go
          set-bus-speed 
           fd speed
          record-busdata
-        ; record-slowed-busdata
+         ;record-slowed-busdata
     set-bus-color             
   ]
   ask oppositebuses
@@ -513,7 +527,7 @@ to go
          ;set negativespeed (- speed)         
           fd (- speed)
          record-busdata
-        ; record-slowed-busdata
+        ;record-slowed-busdata
     set-oppositebus-color             
   ]
 
@@ -540,9 +554,12 @@ to choose-current
   ]
 end
 
+;proceedue to setup busstops
 to setup-busstops
   set-busstops
 end
+
+;proceedure to remove busstops
 
 to remove-busstops
   ask intersections with [phase = floor ((my-phase * ticks-per-cycle) / 100)]
@@ -565,6 +582,61 @@ to remove-busstops
     ;ask patch-at 5 0 [ set pcolor pink ]
     ask patch-at 0 5 [ set pcolor 9.9 ]
   ] 
+  
+  ;removes the busstops away from signal
+  ask intersections with [phase = floor ((my-phase * ticks-per-cycle) / 100)]
+  [
+
+    ask patch-at -5 -1 [ set pcolor 38 ]
+    
+  ]
+  ask intersections-west with [phase = floor ((my-phase * ticks-per-cycle) / 100)]
+  [
+    ask patch-at 5 1 [ set pcolor 38 ]
+    
+  ] 
+  ask intersections-south with [phase = floor ((my-phase * ticks-per-cycle) / 100)]
+  [
+    ask patch-at -1 -7 [ set pcolor 38 ]
+    
+  ] 
+  ask intersections-north with [phase = floor ((my-phase * ticks-per-cycle) / 100)]
+  [
+
+    ask patch-at 1 7 [ set pcolor 38 ]    
+  ]
+end
+
+to move-busstops
+remove-busstops
+  
+  let x-place 0
+  let y-place 0
+  
+  ;if grid
+  
+  ask intersections with [phase = floor ((my-phase * ticks-per-cycle) / 100)]
+  [
+
+    ask patch-at -5 -1 [ set pcolor 24 ]
+    
+  ]
+  ask intersections-west with [phase = floor ((my-phase * ticks-per-cycle) / 100)]
+  [
+    ask patch-at 5 1 [ set pcolor 24 ]
+    
+  ] 
+  ask intersections-south with [phase = floor ((my-phase * ticks-per-cycle) / 100)]
+  [
+    ask patch-at -1 -7 [ set pcolor 24 ]
+    
+  ] 
+  ask intersections-north with [phase = floor ((my-phase * ticks-per-cycle) / 100)]
+  [
+
+    ask patch-at 1 7 [ set pcolor 24 ]    
+  ] 
+  
 end
 
 to choose-busstop
@@ -575,7 +647,7 @@ to choose-busstop
     ;;if [roads] of patch x-mouse y-mouse
     ;;[
      ; update-busstops
-      unlabel-busstop
+      ;unlabel-busstop
       make-busstop patch x-mouse y-mouse
       label-busstop
       stop
@@ -587,7 +659,8 @@ to remove-busstop
    if mouse-down?
   [
     let x-mouse round mouse-xcor
-    let y-mouse round mouse-ycor     
+    let y-mouse round mouse-ycor        
+    make-busstop patch x-mouse y-mouse 
       unlabel-busstop
       stop
   ]
@@ -639,54 +712,61 @@ to label-busstop
   [
   if [ pcolor ] of patch (round (mouse-xcor) + 1) round mouse-ycor = white 
   [      
-  ask current-busstop
-  [
-    ask patch-at 0 0
+    ;user-message(word "here")stop
+  ;ask current-busstop
+  ;[
+    ;ask patch-at 0 0
+    ask patch round mouse-xcor round mouse-ycor
     [
       ;set shape "house ranch"   
       set pcolor 24     
     ]
    
-    ask patch-at 1 0    
+    ;ask patch-at 1 0    
+    ask patch round mouse-xcor round mouse-ycor
     [ 
       set plabel-color 21
       set plabel "current-busstop"
     ] 
-  ]
+  ;]
   ];; end of if
 
   
   if  [pcolor]  of patch round mouse-xcor (round( mouse-ycor) - 1) = white 
   [               
-  ask current-busstop
-  [
-    ask patch-at 0 0
+  ;ask current-busstop
+  ;[
+    ;ask patch-at 0 0
+    ask patch round mouse-xcor round mouse-ycor
     [
       set pcolor 24     
     ]
-    ask patch-at 1 0
+    ;ask patch-at 1 0
+    ask patch round mouse-xcor round mouse-ycor
     [ 
       set plabel-color 21
       set plabel "current-busstop"
     ] 
-  ]
+  ;]
   ];; end of if
   
   
   
   if [ pcolor ] of patch (round ( mouse-xcor) - 1)  round mouse-ycor = white 
   [  
-  ask current-busstop
-  [
-    ask patch-at 0 0   
+  ;ask current-busstop
+  ;[
+    ;ask patch-at 0 0   
+    ask patch round mouse-xcor round mouse-ycor
     [
       set pcolor 24     
     ]
-    ask patch-at 1 0
+    ;ask patch-at 1 0
+    ask patch round mouse-xcor round mouse-ycor
     [ 
       set plabel-color 21
       set plabel "current-busstop"
-    ] 
+   ; ] 
   ]
   ];; end of if
 
@@ -694,20 +774,20 @@ to label-busstop
   if [ pcolor ] of patch round  mouse-xcor  (round (mouse-ycor) + 1) = white 
   [  
               
-  ask current-busstop
-  [
-    ;ask patch-at  round ( mouse-xcor ) round(mouse-ycor + 1)
-    ask patch-at 0 0
+  ;ask current-busstop
+  ;[
+    ;ask patch-at 0 0
+    ask patch round mouse-xcor round mouse-ycor
     [
       set pcolor 24     
     ]
-    ask patch-at 1 0
-    ;    ask patch-at  round ( mouse-xcor ) round(mouse-ycor + 1)
+    ;ask patch-at 1 0
+    ask patch round mouse-xcor round mouse-ycor
     [ 
       set plabel-color 21
       set plabel "current-busstop"
     ] 
-  ]
+  ;]
   ];; end of if
   ];; end of if for checking patch color =38
  
@@ -752,20 +832,24 @@ end
 to unlabel-busstop  
   if[pcolor] of patch round mouse-xcor round mouse-ycor = 24
   [
-  ask current-busstop
-  [
-    ask patch-at 0 0
+  ;ask current-busstop
+  ;[
+    ;ask patch-at 0 0
+    ask patch round mouse-xcor round mouse-ycor
     [
       set pcolor 38
     ]
-    ask patch-at 1 0
+    ;ask patch-at 1 0
+    ask patch round mouse-xcor round mouse-ycor
     [
        set plabel ""
     ]
     set pcolor 38
-  ]
+  ;]
   ];end of if
-  
+  ;[
+   ; user-message(word "there is no busstop")stop
+  ;]
 
 
   
@@ -814,14 +898,6 @@ to set-busstops
   ] 
 end
 
-;;create one bus-stop
-;; not used in current simulation
-to set-busstop
-  ask roads with [phase = floor ((my-phase * ticks-per-cycle) / 100)]
-  [
-    ask patch-at -3 0 [ set pcolor 45 ]
-  ]
-end
 
 ;; This procedure checks the variable green-light-up? at each intersection and sets the
 ;; traffic lights to have the green light up or the green light to the left.
@@ -836,10 +912,10 @@ to set-signal-colors  ;; intersection (patch) procedure
       ask patch-at 0 -1 [ set pcolor green 
         set intersection? true
         ]
-      ask patch-at 2 3 [ set pcolor red 
+      ask patch-at 2 3 [ set pcolor green
         set intersection? true
         ]
-      ask patch-at 3 2 [ set pcolor green 
+      ask patch-at 3 2 [ set pcolor red 
         set intersection? true
         ]      
       
@@ -851,10 +927,10 @@ to set-signal-colors  ;; intersection (patch) procedure
       ask patch-at 0 -1 [ set pcolor red 
         set intersection? true
         ]
-      ask patch-at 2 3 [ set pcolor green
+      ask patch-at 2 3 [ set pcolor red
         set intersection? true
         ]
-      ask patch-at 3 2 [ set pcolor red 
+      ask patch-at 3 2 [ set pcolor green 
         set intersection? true
         ]
     ]
@@ -873,10 +949,10 @@ to set-signal-colors  ;; intersection (patch) procedure
       set intersection? true
       ]
   ]
-  ask patch-at 1 0 [ set pcolor 36 ]
-  ask patch-at 0 1 [ set pcolor 36 ]
-  ask patch-at 1 2 [ set pcolor 36 ]
-  ask patch-at 2 1 [ set pcolor 36 ]
+  ask patch-at 1 0 [ set pcolor white ]
+  ask patch-at 0 1 [ set pcolor white ]
+  ask patch-at 1 2 [ set pcolor white ]
+  ask patch-at 2 1 [ set pcolor white ]
 end
 
 
@@ -885,67 +961,55 @@ end
 ;; turtle (if any) on the patch in front of them
 to set-car-speed  ;; turtle procedure
 
-    ;;slow down the turtle if there is a stop and only if there is other vehicle in front
-  
-  
   ifelse pcolor = red 
-  [ set speed 0 ]
+  [     set speed 0  ];end of if
   [
     ifelse up-vehicle? 
     [ 
       ;slow down the cars if there is a bus stop on side of road and if there is a bus in the bus stop
-      ifelse [pcolor] of patch-at -2 0 = 24 and any? (turtles-on patch-ahead 1 ) with [shape = "bus"]
+      ifelse [pcolor] of patch-at -1 1 = 24 and any? (newbuses-on patch-ahead 1 ) ;with [shape = "bus"]
       [
-        set speed 0.5
-        user-message(word "car slowed")stop
-        record-slowed-cardata 
+        set speed 0.3        
+        ;record-slowed-cardata        
       ]
       [
         set-speed 0 1 
       ]
     ]
-    [
-      ifelse [pcolor] of patch-at 0 -2 = 24 and any? (turtles-on patch-ahead 1 ) with [shape = "bus"]
+    [               
+      ifelse [pcolor] of patch-at 1 -1 = 24 and any? (newbuses-on patch-ahead 1 ) ;with [shape = "horizontalbus"]
       [
-        set speed 0.5
-                user-message(word "car slowed1")stop
-        record-slowed-cardata       
+        set speed 0.3
+        ;record-slowed-cardata           
       ]
-      [set-speed 1 0 ]
-       
+      [set-speed 1 0 ]       
     ]
-  ]
+  ];end of else
 end
 
 ;; set the turtles' speed based on whether they are at a red traffic light or the speed of the
 ;; turtle (if any) on the patch in front of them
 to set-oppositecar-speed  ;; turtle procedure
-
-
      ifelse pcolor = red
-     [set speed 0]  
+     [set speed 0 ];end of if  
      [     
-  
-        ;;slow down the turtle if there is a stop and only if there is other vehicle in front
     ifelse down-vehicle? 
     [
             ;slow down the cars if there is a bus stop on side of road and if there is a bus in the bus stop
-      ifelse [pcolor] of patch-at 1 0 = 24 ;and (any? (turtles-on patch-ahead -1 ) with [shape = "other-bus"])  
+      ifelse [pcolor] of patch-at 1 -1 = 24 and any? (oppositebuses-on patch-ahead -1 ) ;with [shape = "other-bus"])  
       [
-        set speed 0.5
-                user-message(word "car slowed2")stop
-        record-slowed-cardata    
+        set speed 0.3
+        ;record-slowed-cardata    
       ]
       [
         set-oppositecarspeed 0 -1 
       ]       
     ]
-    [
-       ifelse [pcolor] of patch-at 0 1 = 24 and (any? (turtles-on patch-ahead -1 ) with [shape = "other-bus"])  
-      [
-        set speed 0.5
-                user-message(word "car slowed3")stop
-        record-slowed-cardata 
+    [      
+       ifelse [pcolor] of patch-at -1 1 = 24 and any? (oppositebuses-on patch-ahead -1 ); with [shape = "other-bus"])  
+      [                          
+        set speed 0.3      
+        ;record-slowed-cardata 
       ]
        [
        set-oppositecarspeed -1 0 
@@ -958,18 +1022,19 @@ end
 ;; set the buses' speed based on whether they are at a red traffic light or the speed of the
 ;; turtle (if any) on the patch in front of them
 to set-bus-speed  ;; turtle procedure
-  
-    ;;slow down the turtle if there is a stop 
-  ifelse pcolor = 45 
-  [set speed 0]
+   
+  ifelse pcolor = 45
+  [ 
+    set speed 0    
+      count-vehicles-stopped-back    
+  ];; end of pcolor 45
   [
     ifelse up-vehicle? 
     [ 
       ifelse [pcolor] of patch-at -1 0 = 24
       [
-            ;            user-message(word "bus slowed") stop
-        set speed 0.5  
-        record-slowed-busdata  
+        set speed 0.3  
+        record-slowed-busdata                 
       ]
       [
         set-busspeed 0 1 
@@ -978,26 +1043,25 @@ to set-bus-speed  ;; turtle procedure
     [
       ifelse [pcolor] of patch-at 0 -1 = 24
       [
-        set speed 0.5
-             ;   user-message(word "car slowed1")stop
-        record-slowed-busdata       
+        set speed 0.3
+        record-slowed-busdata        
       ]
       [set-busspeed 1 0 ]
        
     ]
   ]
-       
+        
   ifelse pcolor = red 
-  [ set speed 0 ]
+  [ 
+    set speed 0 
+    ]
   [
     ifelse up-vehicle? 
     [ 
       ifelse [pcolor] of patch-at -1 0 = 24
       [
-        set speed 0.5  
-              ;  user-message(word "car slowed2")stop
+        set speed 0.3  
         record-slowed-busdata        
-        ;user-message (word "slowed 11") stop          
       ]
       [
         set-busspeed 0 1 
@@ -1006,8 +1070,7 @@ to set-bus-speed  ;; turtle procedure
     [
       ifelse [pcolor] of patch-at 0 -1 = 24
       [
-        set speed 0.5
-               ; user-message(word "car slowed3")stop
+        set speed 0.3
         record-slowed-busdata        
       ]
       [set-busspeed 1 0 ]
@@ -1021,15 +1084,18 @@ end
 ;; turtle (if any) on the patch in front of them
 to set-oppositebus-speed  ;; turtle procedure
   
-    ;;slow down the turtle if there is a stop 
-  ifelse pcolor = 45 
-  [set speed 0]
+ 
+   ifelse pcolor = 45
+  [ 
+    set speed 0 
+   count-vehicles-stopped-ahead
+  ]
   [
     ifelse down-vehicle?     
     [
       ifelse [pcolor] of patch-at 1 0 = 24
       [
-        set speed 0.5  
+        set speed 0.3
         record-slowed-busdata        
       ]
       [
@@ -1039,7 +1105,7 @@ to set-oppositebus-speed  ;; turtle procedure
     [
        ifelse [pcolor] of patch-at 0 1 = 24
       [
-        set speed 0.5
+        set speed 0.3
         record-slowed-busdata        
       ]
        [
@@ -1048,7 +1114,6 @@ to set-oppositebus-speed  ;; turtle procedure
      ]
   ]
   
-
   ifelse pcolor = red 
   [ set speed 0 ]
   [
@@ -1056,7 +1121,7 @@ to set-oppositebus-speed  ;; turtle procedure
     [
       ifelse [pcolor] of patch-at 1 0 = 24
       [
-        set speed 0.5
+        set speed 0.3
         record-slowed-busdata        
       ]
       [
@@ -1066,7 +1131,7 @@ to set-oppositebus-speed  ;; turtle procedure
     [
        ifelse [pcolor] of patch-at 0 1 = 24
       [
-        set speed 0.5
+        set speed 0.3
         record-slowed-busdata        
       ]
        [
@@ -1076,6 +1141,8 @@ to set-oppositebus-speed  ;; turtle procedure
   ]
   
 end
+
+
 
 ;; set the speed variable of the turtle to an appropriate value (not exceeding the
 ;; speed limit) based on whether there are turtles on the patch in front of the turtle
@@ -1171,7 +1238,7 @@ end
 to slow-down  ;; turtle procedure
   ifelse speed <= 0  ;;if speed < 0
   [ set speed 0 ]
-  [ set speed speed - acceleration ]
+  [ set speed speed - acceleration   ]
 end
 
 ;; increase the speed of the turtle
@@ -1179,6 +1246,7 @@ to speed-up  ;; turtle procedure
   ifelse speed > speed-limit
   [ set speed speed-limit ]
   [ set speed speed + acceleration ]
+   
 end
 
 ;; decrease the speed of the turtle
@@ -1192,7 +1260,7 @@ end
 to opposite-speed-up  ;; turtle procedure
   ifelse speed > speed-limit
   [ set speed speed-limit ]
-  [ set speed speed + acceleration ]
+  [ set speed speed + acceleration]
 end
 
 
@@ -1224,6 +1292,796 @@ to set-oppositebus-color  ;; turtle procedure
   [ ask oppositebuses [ set color 25 ]]
 end
 
+;;to count vehicles stopping behind a bus
+to count-vehicles-stopped-back
+  let x-range 0
+let y-range 0
+  if grid-size-x = 1 and grid-size-y = 1
+      [
+        set x-range 1
+          while [x-range <= 30]
+          [
+           if any? (newcars-on patch-ahead (- x-range)) with [speed = 0 ] 
+          [  
+          set num-cars-stopped-at-yellowstop num-cars-stopped-at-yellowstop + 1
+          ]
+          set x-range x-range + 1
+        ];end of while
+      ]     
+      
+      if grid-size-x = 1 and grid-size-y = 2
+      [
+        ifelse up-vehicle?
+        [
+          set y-range 1
+          while [y-range <= 12]
+          [
+          if any? (newcars-on patch-ahead (- y-range)) with [speed = 0 ]   
+          [
+            set num-cars-stopped-at-yellowstop num-cars-stopped-at-yellowstop + 1
+          ]
+          set y-range y-range + 1
+          ]
+        ]
+        [
+        set x-range 1
+          while [x-range <= 30]
+          [
+           if any? (newcars-on patch-ahead (- x-range)) with [speed = 0 ] 
+          [  
+          set num-cars-stopped-at-yellowstop num-cars-stopped-at-yellowstop + 1
+          ]
+          set x-range x-range + 1
+        ];end of while
+        ]       
+      ]
+      
+      if grid-size-x = 1 and grid-size-y = 3
+      [
+        ifelse up-vehicle?
+        [
+          set y-range 1
+          while [y-range <= 6]
+          [
+          if any? (newcars-on patch-ahead (- y-range)) with [speed = 0 ]   
+          [
+            set num-cars-stopped-at-yellowstop num-cars-stopped-at-yellowstop + 1
+          ]
+          set y-range y-range + 1          
+          ]
+         ]
+        [
+          set x-range 1
+          while [x-range <= 30]
+          [
+           if any? (newcars-on patch-ahead (- x-range)) with [speed = 0 ] 
+          [  
+          set num-cars-stopped-at-yellowstop num-cars-stopped-at-yellowstop + 1
+          ]
+          set x-range x-range + 1
+        ];end of while          
+        ]
+        
+      ]     
+      if grid-size-x = 1 and grid-size-y = 4
+      [
+        ifelse up-vehicle?
+        [
+          set y-range 1
+          while [y-range <= 3]
+          [
+          if any? (newcars-on patch-ahead (- y-range)) with [speed = 0 ]   
+          [
+            set num-cars-stopped-at-yellowstop num-cars-stopped-at-yellowstop + 1
+          ]
+          set y-range y-range + 1          
+          ] 
+          
+        ]
+        [
+        set x-range 1
+          while [x-range <= 30]
+          [
+           if any? (newcars-on patch-ahead (- x-range)) with [speed = 0 ] 
+          [  
+          set num-cars-stopped-at-yellowstop num-cars-stopped-at-yellowstop + 1
+          ]
+          set x-range x-range + 1
+        ];end of while
+        ]
+        
+      ]        
+      if grid-size-x = 2 and grid-size-y = 1
+      [
+        ifelse up-vehicle?
+        [
+          set y-range 1
+          while [y-range <= 30]
+          [
+          if any? (newcars-on patch-ahead (- y-range)) with [speed = 0 ]   
+          [
+            set num-cars-stopped-at-yellowstop num-cars-stopped-at-yellowstop + 1
+          ]
+          set y-range y-range + 1          
+          ]
+
+        ]
+        [
+               set x-range 1
+          while [x-range <= 12]
+          [
+           if any? (newcars-on patch-ahead (- x-range)) with [speed = 0 ] 
+          [  
+          set num-cars-stopped-at-yellowstop num-cars-stopped-at-yellowstop + 1
+          ]
+          set x-range x-range + 1
+         ];end of while
+         ]
+        
+      ]     
+      if grid-size-x = 2 and grid-size-y = 2
+      [  
+          set x-range 1
+          while [x-range <= 12]
+          [
+           if any? (newcars-on patch-ahead (- x-range)) with [speed = 0 ] 
+          [  
+          set num-cars-stopped-at-yellowstop num-cars-stopped-at-yellowstop + 1
+          ]
+          set x-range x-range + 1
+        ];end of while]
+        
+      ]
+      
+      if grid-size-x = 2 and grid-size-y = 3
+      [
+        ifelse up-vehicle?
+        [
+          set y-range 1
+          while [y-range <= 6]
+          [
+          if any? (newcars-on patch-ahead (- y-range)) with [speed = 0 ]   
+          [
+            set num-cars-stopped-at-yellowstop num-cars-stopped-at-yellowstop + 1
+          ]
+          set y-range y-range + 1          
+          ]
+        ]
+        [
+              set x-range 1
+          while [x-range <= 12]
+          [
+           if any? (newcars-on patch-ahead (- x-range)) with [speed = 0 ] 
+          [  
+          set num-cars-stopped-at-yellowstop num-cars-stopped-at-yellowstop + 1
+          ]
+          set x-range x-range + 1
+        ];end of while
+        ]
+        
+      ] 
+          
+      if grid-size-x = 2 and grid-size-y = 4
+      [
+        ifelse up-vehicle?
+        [
+                  set y-range 1
+          while [y-range <= 3]
+          [
+          if any? (newcars-on patch-ahead (- y-range)) with [speed = 0 ]   
+          [
+            set num-cars-stopped-at-yellowstop num-cars-stopped-at-yellowstop + 1
+          ]
+          set y-range y-range + 1          
+          ]
+        ]
+        [ 
+          set x-range 1
+          while [x-range <= 12]
+          [
+           if any? (newcars-on patch-ahead (- x-range)) with [speed = 0 ] 
+          [  
+          set num-cars-stopped-at-yellowstop num-cars-stopped-at-yellowstop + 1
+          ]
+          set x-range x-range + 1
+        ];end of while]
+        
+      ]
+      ]
+      if grid-size-x = 3 and grid-size-y = 1
+      [
+        ifelse up-vehicle?
+        [
+          set y-range 1
+          while [y-range <= 30]
+          [
+          if any? (newcars-on patch-ahead (- y-range)) with [speed = 0 ]   
+          [
+            set num-cars-stopped-at-yellowstop num-cars-stopped-at-yellowstop + 1
+          ]
+          set y-range y-range + 1          
+          ]
+        ]
+        [         
+          set x-range 1
+          while [x-range <= 6]
+          [
+           if any? (newcars-on patch-ahead (- x-range)) with [speed = 0 ] 
+          [  
+          set num-cars-stopped-at-yellowstop num-cars-stopped-at-yellowstop + 1
+          ]
+          set x-range x-range + 1
+        ];end of while 
+        ]
+        
+      ]    
+       
+      if grid-size-x = 3 and grid-size-y = 2
+      [
+        ifelse up-vehicle?
+        [
+          set y-range 1
+          while [y-range <= 12]
+          [
+          if any? (oppositecars-on patch-ahead (-  y-range)) with [speed = 0 ]   
+          [
+            set num-cars-stopped-at-yellowstop num-cars-stopped-at-yellowstop + 1
+          ]
+          set y-range y-range + 1          
+          ]
+        ]
+        [          
+          set x-range 1
+          while [x-range <= 6]
+          [
+           if any? (newcars-on patch-ahead (- x-range)) with [speed = 0 ] 
+          [  
+          set num-cars-stopped-at-yellowstop num-cars-stopped-at-yellowstop + 1
+          ]
+          set x-range x-range + 1
+        ];end of while
+        ] 
+        
+      ]
+      
+      if grid-size-x = 3 and grid-size-y = 3
+      [
+        
+          set x-range 1
+          while [x-range <= 6]
+          [
+           if any? (newcars-on patch-ahead (- x-range)) with [speed = 0 ] 
+          [  
+          set num-cars-stopped-at-yellowstop num-cars-stopped-at-yellowstop + 1
+          ]
+          set x-range x-range + 1
+        ];end of while
+      ]
+           
+      if grid-size-x = 3 and grid-size-y = 4
+      [
+        ifelse up-vehicle?
+        [
+          set y-range 1
+          while [y-range <= 3]
+          [
+          if any? (oppositecars-on patch-ahead ( - y-range)) with [speed = 0 ]   
+          [
+            set num-cars-stopped-at-yellowstop num-cars-stopped-at-yellowstop + 1
+          ]
+          set y-range y-range + 1          
+          ]
+        ]
+        [          
+          set x-range 1
+          while [x-range <= 6]
+          [
+           if any? (newcars-on patch-ahead (- x-range)) with [speed = 0 ] 
+          [  
+          set num-cars-stopped-at-yellowstop num-cars-stopped-at-yellowstop + 1
+          ]
+          set x-range x-range + 1
+        ];end of while
+        ]         
+      ]        
+      if grid-size-x = 4 and grid-size-y = 1
+      [                
+        ifelse up-vehicle?
+        [         
+          set y-range 1
+          while [ y-range <= 30]
+          [
+          ;set num-cars-stopped-at-yellowstop num-cars-stopped-at-yellowstop + count oppositecars with [speed = 0 ]at-points[[0 30]]]
+          if any? (newcars-on patch-ahead (- y-range)) with [speed = 0 ] 
+          [
+            ;user-message(word "h1")stop
+            set num-cars-stopped-at-yellowstop num-cars-stopped-at-yellowstop + 1
+          ]
+           set y-range y-range + 1
+          ]          
+        ]; end of if
+        [
+          set x-range 1
+          while [x-range <= 3]
+          [
+           if any? (newcars-on patch-ahead (- x-range)) with [speed = 0 ] 
+          [  
+          set num-cars-stopped-at-yellowstop num-cars-stopped-at-yellowstop + 1
+          ]
+          set x-range x-range + 1
+        ];end of while        
+        ]
+      ]
+        
+         
+      if grid-size-x = 4 and grid-size-y = 2
+      [
+        ifelse up-vehicle?
+        [
+          set y-range 1
+          while [ y-range <= 12]
+          [          
+          if any? (newcars-on patch-ahead (- y-range)) with [speed = 0 ] 
+          [
+            set num-cars-stopped-at-yellowstop num-cars-stopped-at-yellowstop + 1
+          ]
+           set y-range y-range + 1
+          ]          
+        ]
+        [
+          set x-range 1
+          while [x-range <= 3]
+          [
+           if any? (newcars-on patch-ahead (- x-range)) with [speed = 0 ] 
+          [  
+          set num-cars-stopped-at-yellowstop num-cars-stopped-at-yellowstop + 1
+          ]
+          set x-range x-range + 1
+        ];end of while          
+        ]  
+        
+      ]
+      
+      if grid-size-x = 4 and grid-size-y = 3
+      [
+        ifelse up-vehicle?
+        [
+          set y-range 1
+          while [ y-range <= 6]
+          [          
+          if any? (newcars-on patch-ahead (- y-range)) with [speed = 0 ] 
+          [
+            set num-cars-stopped-at-yellowstop num-cars-stopped-at-yellowstop + 1
+          ]
+           set y-range y-range + 1
+          ]
+        ]
+        [
+          set x-range 1
+          while [x-range <= 3]
+          [
+           if any? (newcars-on patch-ahead (- x-range)) with [speed = 0 ] 
+          [  
+          set num-cars-stopped-at-yellowstop num-cars-stopped-at-yellowstop + 1
+          ]
+          set x-range x-range + 1
+        ];end of while          
+        ]
+
+        
+      ]
+           
+      if grid-size-x = 4 and grid-size-y = 4
+      [        
+          set x-range 1
+          while [x-range <= 3]
+          [
+           if any? (newcars-on patch-ahead (- x-range)) with [speed = 0 ] 
+          [  
+          set num-cars-stopped-at-yellowstop num-cars-stopped-at-yellowstop + 1
+          ]
+          set x-range x-range + 1
+        ];end of while
+      ]                         
+            
+
+end
+
+;;to count vehicles stopping behind a bus
+to count-vehicles-stopped-ahead
+let x-range 0
+let y-range 0
+  if grid-size-x = 1 and grid-size-y = 1
+      [
+        set x-range 1
+          while [x-range <= 30]
+          [
+           if any? (oppositecars-on patch-ahead x-range) with [speed = 0 ] 
+          [  
+          set num-cars-stopped-at-yellowstop num-cars-stopped-at-yellowstop + 1
+          ]
+          set x-range x-range + 1
+        ];end of while
+      ]     
+      
+      if grid-size-x = 1 and grid-size-y = 2
+      [
+        ifelse down-vehicle?
+        [
+          set y-range 1
+          while [y-range <= 12]
+          [
+          if any? (oppositecars-on patch-ahead y-range) with [speed = 0 ]   
+          [
+            set num-cars-stopped-at-yellowstop num-cars-stopped-at-yellowstop + 1
+          ]
+          set y-range y-range + 1
+          ]
+        ]
+        [
+        set x-range 1
+          while [x-range <= 30]
+          [
+           if any? (oppositecars-on patch-ahead x-range) with [speed = 0 ] 
+          [  
+          set num-cars-stopped-at-yellowstop num-cars-stopped-at-yellowstop + 1
+          ]
+          set x-range x-range + 1
+        ];end of while
+        ]       
+      ]
+      
+      if grid-size-x = 1 and grid-size-y = 3
+      [
+        ifelse down-vehicle?
+        [
+          set y-range 1
+          while [y-range <= 6]
+          [
+          if any? (oppositecars-on patch-ahead y-range) with [speed = 0 ]   
+          [
+            set num-cars-stopped-at-yellowstop num-cars-stopped-at-yellowstop + 1
+          ]
+          set y-range y-range + 1          
+          ]
+         ]
+        [
+          set x-range 1
+          while [x-range <= 30]
+          [
+           if any? (oppositecars-on patch-ahead x-range) with [speed = 0 ] 
+          [  
+          set num-cars-stopped-at-yellowstop num-cars-stopped-at-yellowstop + 1
+          ]
+          set x-range x-range + 1
+        ];end of while          
+        ]
+        
+      ]     
+      if grid-size-x = 1 and grid-size-y = 4
+      [
+        ifelse down-vehicle?
+        [
+          set y-range 1
+          while [y-range <= 3]
+          [
+          if any? (oppositecars-on patch-ahead y-range) with [speed = 0 ]   
+          [
+            set num-cars-stopped-at-yellowstop num-cars-stopped-at-yellowstop + 1
+          ]
+          set y-range y-range + 1          
+          ] 
+          
+        ]
+        [
+        set x-range 1
+          while [x-range <= 30]
+          [
+           if any? (oppositecars-on patch-ahead x-range) with [speed = 0 ] 
+          [  
+          set num-cars-stopped-at-yellowstop num-cars-stopped-at-yellowstop + 1
+          ]
+          set x-range x-range + 1
+        ];end of while
+        ]
+        
+      ]        
+      if grid-size-x = 2 and grid-size-y = 1
+      [
+        ifelse down-vehicle?
+        [
+          set y-range 1
+          while [y-range <= 30]
+          [
+          if any? (oppositecars-on patch-ahead y-range) with [speed = 0 ]   
+          [
+            set num-cars-stopped-at-yellowstop num-cars-stopped-at-yellowstop + 1
+          ]
+          set y-range y-range + 1          
+          ]
+
+        ]
+        [
+               set x-range 1
+          while [x-range <= 12]
+          [
+           if any? (oppositecars-on patch-ahead x-range) with [speed = 0 ] 
+          [  
+          set num-cars-stopped-at-yellowstop num-cars-stopped-at-yellowstop + 1
+          ]
+          set x-range x-range + 1
+         ];end of while
+         ]
+        
+      ]     
+      if grid-size-x = 2 and grid-size-y = 2
+      [  
+          set x-range 1
+          while [x-range <= 12]
+          [
+           if any? (oppositecars-on patch-ahead x-range) with [speed = 0 ] 
+          [  
+          set num-cars-stopped-at-yellowstop num-cars-stopped-at-yellowstop + 1
+          ]
+          set x-range x-range + 1
+        ];end of while]
+        
+      ]
+      
+      if grid-size-x = 2 and grid-size-y = 3
+      [
+        ifelse down-vehicle?
+        [
+          set y-range 1
+          while [y-range <= 6]
+          [
+          if any? (oppositecars-on patch-ahead y-range) with [speed = 0 ]   
+          [
+            set num-cars-stopped-at-yellowstop num-cars-stopped-at-yellowstop + 1
+          ]
+          set y-range y-range + 1          
+          ]
+        ]
+        [
+              set x-range 1
+          while [x-range <= 12]
+          [
+           if any? (oppositecars-on patch-ahead x-range) with [speed = 0 ] 
+          [  
+          set num-cars-stopped-at-yellowstop num-cars-stopped-at-yellowstop + 1
+          ]
+          set x-range x-range + 1
+        ];end of while
+        ]
+        
+      ] 
+          
+      if grid-size-x = 2 and grid-size-y = 4
+      [
+        ifelse down-vehicle?
+        [
+                  set y-range 1
+          while [y-range <= 3]
+          [
+          if any? (oppositecars-on patch-ahead y-range) with [speed = 0 ]   
+          [
+            set num-cars-stopped-at-yellowstop num-cars-stopped-at-yellowstop + 1
+          ]
+          set y-range y-range + 1          
+          ]
+        ]
+        [ 
+          set x-range 1
+          while [x-range <= 12]
+          [
+           if any? (oppositecars-on patch-ahead x-range) with [speed = 0 ] 
+          [  
+          set num-cars-stopped-at-yellowstop num-cars-stopped-at-yellowstop + 1
+          ]
+          set x-range x-range + 1
+        ];end of while]
+        
+      ]
+      ]
+      if grid-size-x = 3 and grid-size-y = 1
+      [
+        ifelse down-vehicle?
+        [
+          set y-range 1
+          while [y-range <= 30]
+          [
+          if any? (oppositecars-on patch-ahead y-range) with [speed = 0 ]   
+          [
+            set num-cars-stopped-at-yellowstop num-cars-stopped-at-yellowstop + 1
+          ]
+          set y-range y-range + 1          
+          ]
+        ]
+        [         
+          set x-range 1
+          while [x-range <= 6]
+          [
+           if any? (oppositecars-on patch-ahead x-range) with [speed = 0 ] 
+          [  
+          set num-cars-stopped-at-yellowstop num-cars-stopped-at-yellowstop + 1
+          ]
+          set x-range x-range + 1
+        ];end of while 
+        ]
+        
+      ]    
+       
+      if grid-size-x = 3 and grid-size-y = 2
+      [
+        ifelse down-vehicle?
+        [
+          set y-range 1
+          while [y-range <= 12]
+          [
+          if any? (oppositecars-on patch-ahead y-range) with [speed = 0 ]   
+          [
+            set num-cars-stopped-at-yellowstop num-cars-stopped-at-yellowstop + 1
+          ]
+          set y-range y-range + 1          
+          ]
+        ]
+        [          
+          set x-range 1
+          while [x-range <= 6]
+          [
+           if any? (oppositecars-on patch-ahead x-range) with [speed = 0 ] 
+          [  
+          set num-cars-stopped-at-yellowstop num-cars-stopped-at-yellowstop + 1
+          ]
+          set x-range x-range + 1
+        ];end of while
+        ] 
+        
+      ]
+      
+      if grid-size-x = 3 and grid-size-y = 3
+      [
+        
+          set x-range 1
+          while [x-range <= 6]
+          [
+           if any? (oppositecars-on patch-ahead x-range) with [speed = 0 ] 
+          [  
+          set num-cars-stopped-at-yellowstop num-cars-stopped-at-yellowstop + 1
+          ]
+          set x-range x-range + 1
+        ];end of while
+      ]
+           
+      if grid-size-x = 3 and grid-size-y = 4
+      [
+        ifelse down-vehicle?
+        [
+          set y-range 1
+          while [y-range <= 3]
+          [
+          if any? (oppositecars-on patch-ahead y-range) with [speed = 0 ]   
+          [
+            set num-cars-stopped-at-yellowstop num-cars-stopped-at-yellowstop + 1
+          ]
+          set y-range y-range + 1          
+          ]
+        ]
+        [          
+          set x-range 1
+          while [x-range <= 6]
+          [
+           if any? (oppositecars-on patch-ahead x-range) with [speed = 0 ] 
+          [  
+          set num-cars-stopped-at-yellowstop num-cars-stopped-at-yellowstop + 1
+          ]
+          set x-range x-range + 1
+        ];end of while
+        ]         
+      ]        
+      if grid-size-x = 4 and grid-size-y = 1
+      [                
+        ifelse down-vehicle?
+        [         
+          set y-range 1
+          while [ y-range <= 30]
+          [
+          ;set num-cars-stopped-at-yellowstop num-cars-stopped-at-yellowstop + count oppositecars with [speed = 0 ]at-points[[0 30]]]
+          if any? (oppositecars-on patch-ahead y-range) with [speed = 0 ] 
+          [
+            ;user-message(word "h3")stop            
+            set num-cars-stopped-at-yellowstop num-cars-stopped-at-yellowstop + 1
+          ]
+           set y-range y-range + 1
+          ]          
+        ]; end of if
+        [
+          set x-range 1
+          while [x-range <= 3]
+          [
+           if any? (oppositecars-on patch-ahead x-range) with [speed = 0 ] 
+          [  
+           ; user-message(word "h4")stop            
+          set num-cars-stopped-at-yellowstop num-cars-stopped-at-yellowstop + 1
+          ]
+          set x-range x-range + 1
+        ];end of while        
+        ]
+      ]
+        
+         
+      if grid-size-x = 4 and grid-size-y = 2
+      [
+        ifelse down-vehicle?
+        [
+          set y-range 1
+          while [ y-range <= 12]
+          [          
+          if any? (oppositecars-on patch-ahead y-range) with [speed = 0 ] 
+          [
+            set num-cars-stopped-at-yellowstop num-cars-stopped-at-yellowstop + 1
+          ]
+           set y-range y-range + 1
+          ]          
+        ]
+        [
+          set x-range 1
+          while [x-range <= 3]
+          [
+           if any? (oppositecars-on patch-ahead x-range) with [speed = 0 ] 
+          [  
+          set num-cars-stopped-at-yellowstop num-cars-stopped-at-yellowstop + 1
+          ]
+          set x-range x-range + 1
+        ];end of while          
+        ]  
+        
+      ]
+      
+      if grid-size-x = 4 and grid-size-y = 3
+      [
+        ifelse down-vehicle?
+        [
+          set y-range 1
+          while [ y-range <= 6]
+          [          
+          if any? (oppositecars-on patch-ahead y-range) with [speed = 0 ] 
+          [
+            set num-cars-stopped-at-yellowstop num-cars-stopped-at-yellowstop + 1
+          ]
+           set y-range y-range + 1
+          ]
+        ]
+        [
+          set x-range 1
+          while [x-range <= 3]
+          [
+           if any? (oppositecars-on patch-ahead x-range) with [speed = 0 ] 
+          [  
+          set num-cars-stopped-at-yellowstop num-cars-stopped-at-yellowstop + 1
+          ]
+          set x-range x-range + 1
+        ];end of while          
+        ]
+
+        
+      ]
+           
+      if grid-size-x = 4 and grid-size-y = 4
+      [        
+          set x-range 1
+          while [x-range <= 3]
+          [
+           if any? (oppositecars-on patch-ahead x-range) with [speed = 0 ] 
+          [  
+          set num-cars-stopped-at-yellowstop num-cars-stopped-at-yellowstop + 1
+          ]
+          set x-range x-range + 1
+        ];end of while
+      ]                         
+            
+end
+
 ;; keep track of the number of stopped turtles and the amount of time a turtle has been stopped
 ;; if its speed is 0
 to record-data  ;; turtle procedure
@@ -1234,6 +2092,7 @@ to record-data  ;; turtle procedure
   ]
   [ set wait-time 0 ]
 end
+
 
 ;; keep track of the number of stopped bus and the amount of time a turtle has been stopped
 ;; if its speed is 0
@@ -1247,26 +2106,19 @@ to record-busdata  ;; turtle procedure
 end
 
 ;; keep track of the number of stopped turtles and the amount of time a turtle has been stopped
-;; if its speed is 0
-to record-slowed-cardata  ;; turtle procedure
-  ifelse speed = 0.5
-  [
+to record-slowed-cardata  ;; turtle procedure 
+    if speed = 0.3
+    [
     set num-cars-slowed num-cars-slowed + 1
-    ;user-message(num-cars-slowed) stop
-    set wait-time wait-time + 0.5
-  ]
-  [ set wait-time 0 ]
+;    user-message(num-cars-slowed) stop
+    set wait-time wait-time + 0.3
+    ]
 end
 
 ;; keep track of the number of stopped bus and the amount of time a turtle has been stopped
-;; if its speed is 0
 to record-slowed-busdata  ;; turtle procedure
-  ifelse speed = 0.5
-  [
     set num-buses-slowed num-buses-slowed + 1
-    set bus-wait-time bus-wait-time + 0.5
-  ]
-  [ set bus-wait-time 0 ]
+    set bus-wait-time bus-wait-time + 0.3  
 end
 
 
@@ -1332,11 +2184,11 @@ ticks
 30.0
 
 PLOT
-780
-493
-1152
-659
-Average Wait Time of Cars
+774
+457
+1146
+623
+Average Wait Time of Cars & buses
 Time
 Average Wait
 0.0
@@ -1351,10 +2203,10 @@ PENS
 "bus-wait-time" 1.0 0 -13345367 true "" "plot mean [bus-wait-time] of turtles with [ shape = \"bus\" or shape = \"other-bus\" or shape = \"horizontalbus\" or shape =\"horizontalbus1\"]"
 
 PLOT
-393
-494
-773
-656
+387
+458
+767
+620
 Avg Speed of Cars & buses
 Time
 Average Speed
@@ -1419,18 +2271,18 @@ num-cars
 num-cars
 1
 400
-114
+90
 1
 1
 NIL
 HORIZONTAL
 
 PLOT
-7
-491
-383
-657
-Stopped Cars & buses
+1
+455
+377
+621
+Total Stopped Cars & buses
 Time
 Stopped Cars,buses
 0.0
@@ -1439,16 +2291,16 @@ Stopped Cars,buses
 100.0
 true
 true
-"set-plot-y-range 0 num-cars" ""
+"set-plot-y-range 0 num-cars + num-buses" ""
 PENS
 "cars-stopped" 1.0 0 -16777216 true "" "plot num-cars-stopped"
 "bus-stopped" 1.0 0 -13791810 true "" "plot num-buses-stopped"
 
 BUTTON
-221
-184
-285
 217
+203
+281
+236
 Go
 go
 T
@@ -1494,10 +2346,10 @@ NIL
 HORIZONTAL
 
 MONITOR
-205
-132
-310
-177
+201
+151
+306
+196
 Current Phase
 phase
 3
@@ -1597,27 +2449,100 @@ NIL
 0
 
 SLIDER
-793
-194
-965
-227
+127
+107
+299
+140
 num-buses
 num-buses
 1
 200
-25
+30
 1
 1
 NIL
 HORIZONTAL
 
 BUTTON
-781
-136
-929
-169
+776
+213
+924
+246
 remove busstop
 remove-busstop
+T
+1
+T
+PATCH
+NIL
+NIL
+NIL
+NIL
+0
+
+BUTTON
+772
+164
+969
+197
+set-busstops-at-signal 
+setup-busstops
+T
+1
+T
+OBSERVER
+NIL
+NIL
+NIL
+NIL
+0
+
+BUTTON
+768
+119
+1008
+152
+remove-busstops
+remove-busstops
+T
+1
+T
+OBSERVER
+NIL
+NIL
+NIL
+NIL
+0
+
+MONITOR
+11
+339
+259
+384
+cars stopped due to yellow busstop
+num-cars-stopped-at-yellowstop
+17
+1
+11
+
+MONITOR
+14
+392
+255
+437
+cars slowed due to brown busstop
+num-cars-slowed
+17
+1
+11
+
+BUTTON
+789
+79
+1047
+112
+place busstop away from signal
+move-busstops
 T
 1
 T
@@ -1629,57 +2554,23 @@ NIL
 0
 
 PLOT
-776
-325
-1152
-477
-slowed buses  & cars
+778
+312
+1247
+452
+Cars stopped at different stops
 Time
-slowed buses & cars
+Stopped cars
 0.0
 100.0
 0.0
 100.0
 true
 true
-"set-plot-y-range 0 num-buses" ""
+"set-plot-y-range 0 25" ""
 PENS
-"cars-slowed" 1.0 0 -13345367 true "" "plot num-buses-slowed"
-"buses-slowed" 1.0 0 -16449023 true "" "plot num-cars-slowed"
-
-BUTTON
-780
-91
-924
-124
-setup-busstops
-setup-busstops\n
-T
-1
-T
-OBSERVER
-NIL
-NIL
-NIL
-NIL
-0
-
-BUTTON
-807
-45
-963
-78
-remove-busstops
-remove-busstops
-T
-1
-T
-OBSERVER
-NIL
-NIL
-NIL
-NIL
-0
+"cars stopped at yellow stop" 1.0 0 -10146808 true "" "plot num-cars-stopped-at-yellowstop"
+"cars slowed at brown stop" 1.0 0 -14439633 true "" "plot num-cars-slowed"
 
 @#$#@#$#@
 ## WHAT IS IT?
